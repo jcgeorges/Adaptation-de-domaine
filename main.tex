@@ -1,0 +1,1326 @@
+
+\documentclass[a4paper,12pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+
+\usepackage[a4paper, margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}    
+\usepackage{lmodern}  
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath, amsthm, amssymb}
+\newtheorem{theoreme}{Théorème}
+\newtheorem{theorem}{Théorème}
+\newtheorem{lemma}{Lemme}[section]
+\newtheorem{remark}{Remarque}
+
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{setspace}
+\geometry{margin=2.5cm}
+\theoremstyle{definition}
+\newtheorem{definition}{Définition}[section]
+\newtheorem{example}{Exemple}[section]
+\newtheorem{proposition}{Proposition}
+\theoremstyle{remark}
+\newtheorem*{remarque}{Remarque}
+
+
+\begin{document}
+
+% ===================== Page de titre =====================
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{logo-vectoriel-niversite-angers.png}
+\end{figure}
+
+\vspace{0.1cm}
+
+\begin{center}
+    \textbf{\Large M1 Data Science}\\[0.4cm]
+    \textbf{\large Travail encadré et de recherche}\\[0.8cm]
+    \vspace{1.5cm}
+    \textbf{\LARGE Sujet : Adaptation de Domaine}
+\end{center}
+
+\vspace{2cm} % ~3 lignes d'espacement
+
+% Noms des participants à gauche
+\noindent
+\begin{minipage}{0.5\textwidth}
+    \raggedright
+    \textbf{Participants :}\\
+    Mehdi KAMASSI\\
+    Jean Constantin GEORGES
+\end{minipage}
+
+\vspace{3.5cm}
+
+% Encadrant à droite
+\begin{flushright}
+    \textbf{Encadrant :}\\
+    Escobar Bach Mickeal
+\end{flushright}
+
+\newpage
+
+% ===================== Plan (page 2) =====================
+\tableofcontents
+
+\newpage
+
+\section{Introduction}
+
+La plupart des travaux en apprentissage automatique reposent sur l’hypothèse que les données d’entraînement et de test proviennent d’une même distribution. Dans ce cadre, les méthodes d’apprentissage discriminatif pour la classification obtiennent généralement de très bonnes performances, car les conditions d’apprentissage et d’évaluation sont similaires.\\
+
+Cependant, cette hypothèse est souvent irréaliste dans des contextes applicatifs concrets. Il est fréquent de disposer d’un grand volume de données étiquetées provenant d’un **domaine source**, tandis que l’on souhaite appliquer le modèle à un **domaine cible** dont la distribution diffère, et pour lequel peu, voire aucune, donnée étiquetée n’est disponible. Ce décalage entre distributions constitue un obstacle majeur à la généralisation des modèles.\\
+
+Ce problème apparaît dans de nombreuses situations. Par exemple, dans le cas d’un filtre anti-spam, un modèle peut être entraîné sur les e-mails d’un groupe d’utilisateurs (domaine source), puis utilisé pour filtrer les messages d’un nouvel utilisateur (domaine cible), dont les habitudes de communication diffèrent. De même, en traitement du langage naturel, un système d’analyse de sentiment entraîné sur des critiques de livres peut être appliqué à des critiques de produits électroniques : bien que le vocabulaire change, certaines structures linguistiques et notions de polarité restent comparables.\\
+
+Dans ce travail, nous nous intéressons au problème de l’**adaptation de domaine**, qui vise à exploiter efficacement les données disponibles dans un domaine source afin d’améliorer les performances sur un domaine cible. Nous cherchons en particulier à répondre à deux questions fondamentales.\\
+Premièrement, dans quelles conditions un classificateur entraîné sur un domaine source peut-il être performant sur un domaine cible ?\\
+Deuxièmement, lorsque l’on dispose d’une petite quantité de données étiquetées dans le domaine cible, comment les combiner efficacement avec les données sources afin de minimiser l’erreur sur le domaine cible ?\\
+
+Pour répondre à la première question, il est nécessaire de quantifier la différence entre les distributions des deux domaines. À cette fin, une notion de divergence adaptée à l’apprentissage est introduite, permettant d’évaluer dans quelle mesure les exemples issus des deux domaines peuvent être distingués, même en l’absence de labels. Cette mesure joue un rôle central dans l’analyse théorique des performances en adaptation de domaine.\\
+
+Par ailleurs, la réussite de l’adaptation repose sur une hypothèse fondamentale : l’existence d’un modèle capable d’obtenir simultanément de bonnes performances sur les deux domaines. Si une telle hypothèse n’existe pas, c’est-à-dire si les tâches source et cible sont trop différentes, alors le transfert d’information devient intrinsèquement limité.\\
+
+Enfin, lorsque quelques données étiquetées du domaine cible sont disponibles, il est possible d’améliorer les performances en combinant les informations issues des deux domaines. Cela conduit à considérer des stratégies reposant sur une pondération entre les données source et cible, permettant de trouver un compromis optimal entre la quantité de données disponibles et leur pertinence pour la tâche cible.\\
+
+Dans la suite de ce travail, nous présenterons le cadre théorique de l’adaptation de domaine, introduirons les principales mesures de divergence entre distributions, puis analyserons les garanties théoriques associées à différentes stratégies d’apprentissage combinant données source et cible.\\
+
+
+%===============================page2=================================================
+
+\newpage
+\section{Un modèle rigoureux d’adaptation de domaine}
+
+\subsection{Définition du problème}
+
+L’adaptation de domaine est une branche de l’apprentissage automatique qui traite des situations où les données d’entraînement (domaine source) et les données de test (domaine cible) proviennent de distributions différentes. Cette différence de distribution constitue un défi majeur pour la généralisation des modèles.
+
+Nous formalisons le problème de l’adaptation de domaine dans le cadre de la classification binaire.
+
+\begin{definition}[Domaine]
+Un domaine est défini comme une paire composée :
+\begin{itemize}
+\item d’une distribution de probabilité $D$ sur un espace d’entrée $X$,
+\item d’une fonction d’étiquetage $f : X \rightarrow [0,1]$.
+\end{itemize}
+
+La fonction $f(x)$ peut être interprétée comme la probabilité conditionnelle
+$\displaystyle \mathbb{P}(y = 1 \mid x)$, ou de manière équivalente comme l’espérance de la
+variable aléatoire $y$ sachant $x$ ($y$ étant une variable aléatoire binaire prenant ses valeurs dans $\{0,1\}$ et représentant l’étiquette associée à l’exemple $x$)
+.\\
+Ce formalisme permet de modéliser un processus
+d’étiquetage potentiellement non déterministe.
+
+Dans un premier temps, nous considérons deux domaines :
+\begin{itemize}
+\item le domaine source noté $\langle D_S, f_S \rangle$,
+\item le domaine cible noté $\langle D_T, f_T \rangle$.
+\end{itemize}
+\end{definition}
+
+La fonction d’étiquetage associe à chaque donnée d’entrée $x$ une sortie représentant
+la classe correcte. Dans le cadre classique de la classification binaire, cette sortie
+prend ses valeurs dans $\{0,1\}$.
+
+Dans ce travail, on adopte un cadre plus général où $f(x) \in [0,1]$.
+Cette valeur peut être interprétée comme la probabilité qu’un exemple appartienne
+à la classe positive, ce qui permet de modéliser des phénomènes d’incertitude ou
+de bruit dans les données.
+
+\subsection{Hypothèses et erreurs}
+
+Une hypothèse est une fonction de prédiction:  
+\[
+h : X \rightarrow \{0,1\}.
+\]
+
+Nous mesurons la performance d’une hypothèse à l’aide de son erreur (ou risque).
+
+\begin{definition}[Erreur]
+La probabilité, selon la distribution $D_S$, qu’une hypothèse $h$ soit en désaccord avec une fonction d’étiquetage $f$ est définie par :
+\[
+\varepsilon_S(h,f) = \mathbb{E}_{x \sim D_S}[|h(x) - f(x)|].
+\]
+
+
+\end{definition}
+
+Lorsque la fonction d’étiquetage est celle du domaine source $f_S$, on définit l’erreur source : 
+\[
+\varepsilon_S(h) = \varepsilon_S(h, f_S).
+\]
+
+De manière analogue, on définit l’erreur sur le domaine cible : 
+\[
+\varepsilon_T(h) = \varepsilon_T(h, f_T).
+\]
+
+
+
+\subsection{Erreur empirique}
+
+En pratique, les distributions $D_S$ et $D_T$ ne sont pas connues. On dispose uniquement d’échantillons finis, ce qui conduit à considérer les erreurs empiriques.
+
+\begin{itemize}
+\item L’erreur empirique sur le domaine source est notée : $\hat{\varepsilon}_S(h)$.
+
+\item L’erreur empirique sur le domaine cible est notée : $\hat{\varepsilon}_T(h)$.
+\end{itemize}
+
+Ces quantités correspondent aux moyennes des erreurs observées sur les échantillons disponibles.
+
+\subsection{Objectif}
+
+L’objectif de l’adaptation de domaine est de construire une hypothèse $h$ minimisant l’erreur sur le domaine cible $\varepsilon_T(h)$, tout en utilisant principalement des données issues du domaine source.
+
+La difficulté principale réside dans le fait que les distributions $D_S$ et $D_T$ sont différentes, ce qui empêche d’appliquer directement les garanties classiques de l’apprentissage statistique.\\
+
+%=======================================partie 3=================================================
+
+\section{Une borne reliant l’erreur source et l’erreur cible}
+
+Nous cherchons à comprendre dans quelle mesure un classificateur entraîné sur un
+domaine source peut conserver de bonnes performances lorsqu’il est appliqué à un domaine
+cible. L’objectif est donc d’établir une relation entre l’erreur commise sur le domaine source
+et celle observée sur le domaine cible.
+
+Dans cette perspective, l’erreur cible peut être analysée en fonction de trois éléments
+principaux :
+\begin{itemize}
+\item l’erreur du classificateur sur le domaine source ;
+\item la divergence entre les distributions source et cible ;
+\item la différence entre les fonctions d’étiquetage associées à ces deux domaines.
+\end{itemize}
+
+Intuitivement, un classificateur a d’autant plus de chances de bien se comporter sur
+le domaine cible qu’il est performant sur le domaine source, que les deux distributions
+sont proches, et que les fonctions d’étiquetage restent similaires.
+
+Dans la pratique, on suppose généralement que les fonctions d’étiquetage $f_S$ et $f_T$
+sont relativement proches. L’enjeu principal devient alors la mesure de la divergence entre
+les distributions $D_S$ et $D_T$.
+
+Nous nous intéressons donc à des méthodes permettant d’estimer cette divergence à partir
+d’échantillons non étiquetés provenant des deux domaines. C’est précisément le rôle de la
+$H$-divergence introduite dans la section suivante.
+
+\subsection{Rôle de la divergence entre distributions}
+
+Afin de comparer les domaines source et cible, une mesure naturelle consiste à utiliser la distance de variation totale, aussi appelée divergence $L_1$, définie par : 
+\[
+d_1(D, D') = 2 \sup_{B \in \mathcal{B}} \left| \Pr_D(B) - \Pr_{D'}(B) \right|,
+\]
+
+où $\mathcal{B}$ désigne l’ensemble des parties mesurables communes aux distributions $D$ et $D'$.
+
+Cette quantité mesure la plus grande différence possible entre les probabilités attribuées par les distributions $D$ et $D'$ à un même événement mesurable.. Elle fournit donc une manière naturelle de quantifier la différence entre deux distributions.\\ 
+
+Lorsque les distributions $D$ et $D'$ admettent des densités
+$\phi_D$ et $\phi_{D'}$, la distance $d_1$ peut également s’écrire :
+\[
+d_1(D,D')
+=
+\int |\phi_D(x)-\phi_{D'}(x)|dx.
+\]
+
+
+\subsection{Idée générale de la borne}
+
+L’analyse théorique qui suit montre que l’erreur sur le domaine cible peut être contrôlée à partir de l’erreur source, à laquelle s’ajoutent deux termes correctifs : un terme mesurant l’écart entre les distributions, et un terme mesurant la différence entre les fonctions d’étiquetage.
+
+Une telle borne est importante car elle met en évidence les conditions nécessaires à une adaptation réussie. En particulier, elle montre qu’un faible risque sur le domaine source ne suffit pas, à lui seul, à garantir de bonnes performances sur le domaine cible. Si les distributions N sont trop différentes, ou si les fonctions d’étiquetage ne décrivent pas réellement la même tâche, alors le transfert peut échouer.
+
+Ainsi, cette analyse justifie l’idée centrale de l’adaptation de domaine : pour espérer bien généraliser sur le domaine cible, il ne suffit pas d’apprendre un bon classificateur sur la source, il faut également tenir compte de la proximité entre les deux domaines.
+
+\subsection{Limites de la divergence \texorpdfstring{$L_1$}{L1}}
+
+Bien que la divergence $L_1$ soit une mesure naturelle, elle présente des limites importantes dans le cadre de l’apprentissage statistique.
+
+D’une part, elle est difficile à estimer de manière fiable à partir d’échantillons finis. D’autre part, elle est souvent trop générale pour notre problème, car elle prend en compte l’ensemble des événements mesurables, y compris ceux qui ne sont pas pertinents pour la classe d’hypothèses étudiée.
+
+Autrement dit, cette mesure peut être trop pessimiste : elle quantifie des différences entre distributions qui n’ont pas nécessairement d’impact sur les performances du classificateur considéré.
+
+\subsection{Vers une divergence adaptée à l’apprentissage}
+
+Ces limitations motivent l’introduction d’une notion de divergence mieux adaptée au cadre de l’apprentissage supervisé. L’idée est de ne plus comparer les distributions sur tous les ensembles mesurables possibles, mais uniquement sur ceux qui sont pertinents pour la classe d’hypothèses considérée.
+
+C’est cette approche qui conduit à la \emph{H-divergence}, puis à la \emph{$\mathcal{H}\Delta\mathcal{H}$-divergence}, qui joueront un rôle central dans les bornes théoriques de l’adaptation de domaine. La section suivante présentera ces notions plus précisément, avant d’énoncer le résultat fondamental reliant rigoureusement l’erreur source et l’erreur cible.\\
+
+%===============================H-divergence=====================================================
+
+\section{Lien théorique entre erreur source et erreur cible}
+
+\subsection{La H-divergence}
+
+La H-divergence mesure la capacité d’une classe d’hypothèses à distinguer deux distributions. Autrement dit, elle quantifie à quel point un classificateur peut différencier des exemples issus du domaine source et du domaine cible.
+
+\begin{definition}[H-divergence]
+Soit $X$ un espace d’entrée muni de deux distributions $D$ et $D'$, et soit $\mathcal{H}$ une classe d’hypothèses sur $X$. Pour toute hypothèse $h \in \mathcal{H}$, on note $I(h) = \{x \in X \mid h(x) = 1\}$.
+
+La H-divergence entre $D$ et $D'$ est définie par :
+\[
+d_{\mathcal{H}}(D, D') = 2 \sup_{h \in \mathcal{H}} \left| \Pr_D(I(h)) - \Pr_{D'}(I(h)) \right|.
+\]
+\end{definition}
+
+
+Cette divergence présente deux propriétés essentielles :
+\begin{itemize}
+\item elle est \textbf{estimable} à partir de données non étiquetées lorsque la classe $\mathcal{H}$ est de dimension VC finie ;
+\item elle est adaptée à l’apprentissage, car elle mesure uniquement les différences entre distributions qui peuvent être détectées par les hypothèses de la classe $H$. Autrement dit, elle se concentre sur les régions de l’espace réellement pertinentes pour le modèle considéré.\\
+\end{itemize}
+
+
+Intuitivement :
+\begin{itemize}
+\item si $d_{\mathcal{H}}(D_S, D_T)$ est grand, alors les deux domaines sont facilement distinguables ;
+\item s’il est petit, alors ils sont similaires du point de vue du modèle.\\
+\end{itemize}
+
+
+
+Une hypothèse $h \in H$ représente un classificateur possible appartenant à la classe
+d’hypothèses $H$. Cette classe correspond donc à l’ensemble des modèles que l’algorithme
+d’apprentissage est autorisé à considérer.
+
+L’ensemble $I(h)=\{x \in X \mid h(x)=1\}$ désigne la région de l’espace d’entrée que l’hypothèse $h$ classe comme positive.
+
+Ainsi, $\Pr_D(I(h))$ représente la probabilité qu’un exemple tiré selon la distribution $D$ soit classé positivement
+par $h$.\\
+
+\medskip
+
+\textbf{Remarque.}
+La $H$-divergence est toujours majorée par la distance $d_1$ :
+\[
+d_H(D,D')
+\leq
+d_1(D,D').
+\]
+
+En effet, la distance $d_1$ est définie par : $d_1(D,D') = 2\sup_{B\in\mathcal B}|D(B)-D'(B)|$,
+où le supremum est pris sur l’ensemble de toutes les parties mesurables de $X$.
+
+En revanche, la $H$-divergence ne considère que les ensembles de la forme
+\[
+I(h)=\{x\in X \mid h(x)=1\},
+\]
+associés aux hypothèses de la classe $H$.
+
+Ainsi, le supremum définissant $d_H$ est pris sur une famille d’ensembles plus restreinte.
+On obtient donc :
+\[
+d_H(D,D')
+\leq
+d_1(D,D').
+\]
+
+Cela montre que la $H$-divergence constitue une mesure plus adaptée à l’apprentissage,
+car elle ne prend en compte que les régions de l’espace pertinentes pour les hypothèses
+considérées.\\
+
+
+\textbf{NB:} La notion de dimension VC intervient ici afin de garantir certaines propriétés théoriques
+de généralisation et d’estimation statistique. Cette notion étant relativement avancée,
+nous ne détaillerons pas sa définition formelle dans ce rapport. Nous retiendrons simplement
+qu’elle mesure la complexité d’une classe d’hypothèses.\\ 
+
+
+
+
+Nous pouvons maintenant énoncer un premier résultat fondamental reliant l’erreur sur le domaine source et l’erreur sur le domaine cible.
+
+%===============================================th1==========================================
+
+\begin{theorem}
+Pour toute hypothèse $h \in H$, on a :
+\[
+\varepsilon_T(h)
+\leq
+\varepsilon_S(h)
++
+d_1(D_S,D_T)
++
+\min
+\left\{
+\mathbb{E}_{D_S}[|f_S(x)-f_T(x)|],
+\mathbb{E}_{D_T}[|f_S(x)-f_T(x)|]
+\right\}.
+\]
+\end{theorem}
+
+\begin{proof}
+Rappelons que :
+\[
+\varepsilon_T(h)=\varepsilon_T(h,f_T),
+\qquad
+\varepsilon_S(h)=\varepsilon_S(h,f_S).
+\]
+
+On ajoute et retranche les termes
+$\varepsilon_S(h,f_T)$ et $\varepsilon_S(h,f_S)$ :
+\[
+\varepsilon_T(h)
+=
+\varepsilon_T(h,f_T)
+-\varepsilon_S(h,f_T)
++\varepsilon_S(h,f_T)
+-\varepsilon_S(h,f_S)
++\varepsilon_S(h,f_S).
+\]
+
+En appliquant l’inégalité triangulaire, on obtient :
+\[
+\varepsilon_T(h)
+\leq
+\varepsilon_S(h)
++
+|\varepsilon_S(h,f_T)-\varepsilon_S(h,f_S)|
++
+|\varepsilon_T(h,f_T)-\varepsilon_S(h,f_T)|.
+\]
+
+\medskip
+
+\textbf{Contrôle du premier terme}
+
+Par définition,
+\[
+\varepsilon_S(h,f_S)
+=
+\mathbb{E}_{D_S}[|h(x)-f(x)|].
+\]
+
+Ainsi,
+\[
+|\varepsilon_S(h,f_T)-\varepsilon_S(h,f_S)|
+=
+\left|
+\mathbb{E}_{D_S}
+\left[
+|h(x)-f_T(x)|
+-
+|h(x)-f_S(x)|
+\right]
+\right|.
+\]
+
+Par inégalité triangulaire,
+\[
+\left|
+\mathbb{E}_{D_S}
+\left[
+|h(x)-f_T(x)|
+-
+|h(x)-f_S(x)|
+\right]
+\right|
+\leq
+\mathbb{E}_{D_S}
+\left[
+\big|
+|h(x)-f_T(x)|
+-
+|h(x)-f_S(x)|
+\big|
+\right].
+\]
+
+Or, pour tous réels $a,b,c$,
+\[
+\big||a-b|-|a-c|\big|
+\leq
+|b-c|.
+\]
+
+En appliquant cette propriété avec
+\[
+a=h(x), \qquad b=f_T(x), \qquad c=f_S(x),
+\]
+on obtient :
+\[
+\big|
+|h(x)-f_T(x)|
+-
+|h(x)-f_S(x)|
+\big|
+\leq
+|f_T(x)-f_S(x)|.
+\]
+
+Donc :
+\[
+|\varepsilon_S(h,f_T)-\varepsilon_S(h,f_S)|
+\leq
+\mathbb{E}_{D_S}[|f_S(x)-f_T(x)|].
+\]
+
+\medskip
+
+\textbf{Contrôle du second terme}
+
+Notons $\phi_S$ et $\phi_T$ les densités associées aux distributions
+$D_S$ et $D_T$. On a :
+\[
+\varepsilon_T(h,f_T)-\varepsilon_S(h,f_T)
+=
+\int
+|h(x)-f_T(x)|
+(\phi_T(x)-\phi_S(x))
+dx.
+\]
+
+Par valeur absolue,
+\[
+|\varepsilon_T(h,f_T)-\varepsilon_S(h,f_T)|
+\leq
+\int
+|h(x)-f_T(x)|
+\, |\phi_T(x)-\phi_S(x)|
+dx.
+\]
+
+Comme
+\[
+h(x)\in\{0,1\}
+\quad \text{et} \quad
+f_T(x)\in[0,1],
+\]
+on a :
+\[
+|h(x)-f_T(x)|\leq 1.
+\]
+
+Ainsi,
+\[
+|\varepsilon_T(h,f_T)-\varepsilon_S(h,f_T)|
+\leq
+\int
+|\phi_T(x)-\phi_S(x)|
+dx.
+\]
+
+Or, par définition de la distance $d_1$,
+\[
+d_1(D_S,D_T)
+=
+\int
+|\phi_T(x)-\phi_S(x)|
+dx.
+\]
+
+Donc :
+\[
+|\varepsilon_T(h,f_T)-\varepsilon_S(h,f_T)|
+\leq
+d_1(D_S,D_T).
+\]
+
+\medskip
+
+\textbf{Conclusion}
+
+On obtient finalement :
+\[
+\varepsilon_T(h)
+\leq
+\varepsilon_S(h)
++
+\mathbb{E}_{D_S}[|f_S(x)-f_T(x)|]
++
+d_1(D_S,D_T).
+\]
+
+Un raisonnement symétrique, en échangeant les rôles de
+$D_S$ et $D_T$, permet également d’obtenir :
+\[
+\varepsilon_T(h)
+\leq
+\varepsilon_S(h)
++
+\mathbb{E}_{D_T}[|f_S(x)-f_T(x)|]
++
+d_1(D_S,D_T).
+\]
+
+En prenant le minimum des deux bornes, on conclut que :
+\[
+\varepsilon_T(h)
+\leq
+\varepsilon_S(h)
++
+d_1(D_S,D_T)
++
+\min
+\left\{
+\mathbb{E}_{D_S}[|f_S(x)-f_T(x)|],
+\mathbb{E}_{D_T}[|f_S(x)-f_T(x)|]
+\right\}.
+\]
+\end{proof}
+
+
+
+
+Ce résultat est fondamental car il identifie clairement les facteurs qui influencent la performance sur le domaine cible :
+
+\begin{itemize}
+\item \textbf{Erreur source} : elle est directement contrôlée par l’apprentissage.
+\item \textbf{Divergence entre distributions} : elle mesure la difficulté du transfert.
+\item \textbf{Différence entre fonctions d’étiquetage} : elle traduit la similarité des tâches.
+\end{itemize}
+
+Ce théorème montre que même un classificateur très performant sur le domaine source peut échouer sur le domaine cible si les distributions sont trop différentes.
+
+Cependant, l’utilisation de la divergence $L_1$ reste problématique en pratique. Cela motive l’introduction de divergences plus adaptées à l’apprentissage, telles que la $\mathcal{H}\Delta\mathcal{H}$-divergence, qui seront étudiées dans la suite.\\
+
+%===========================lemme1=======================
+
+\subsection{Estimation de la H-divergence}
+
+\begin{lemma}
+Soit $\mathcal{H}$ une classe d’hypothèses définie sur $X$, de dimension VC $d$. Soient $U$ et $U'$ deux échantillons de taille $m$, tirés respectivement selon les distributions $D$ et $D'$. Soit $\hat{d}_{\mathcal{H}}(U, U')$ la H-divergence empirique calculée à partir de ces échantillons.
+
+Alors, pour tout $\delta \in (0,1)$, avec une probabilité au moins égale à $1 - \delta$, on a :
+\[
+d_{\mathcal{H}}(D, D') \leq \hat{d}_{\mathcal{H}}(U, U') + 4 \sqrt{\frac{d \log(2m) + \log\left(\frac{2}{\delta}\right)}{m}}.
+\]
+\end{lemma}
+
+
+
+
+Ce résultat établit une propriété fondamentale : la H-divergence empirique, calculée à partir d’échantillons finis, converge uniformément vers la véritable H-divergence lorsque la classe d’hypothèses est de dimension VC finie.
+
+Autrement dit, plus le nombre d’échantillons augmente, plus l’estimation empirique $\hat{d}_{\mathcal{H}}(U, U')$ se rapproche de la vraie divergence $d_{\mathcal{H}}(D, D')$. Le terme supplémentaire dépend de la complexité de la classe $\mathcal{H}$ (via sa dimension VC) et de la taille de l’échantillon.
+
+Ce lemme est essentiel car il garantit que la H-divergence peut être estimée de manière fiable en pratique, contrairement à la divergence $L_1$, qui est difficile à approximer à partir de données finies. Il justifie donc l’utilisation de la H-divergence dans le cadre de l’adaptation de domaine.\\
+
+
+
+Un aspect particulièrement intéressant de ce résultat est qu’il permet de ramener l’estimation de la divergence entre deux distributions à un problème de classification.
+
+L’idée est la suivante :
+\begin{itemize}
+\item on attribue l’étiquette $0$ à chaque instance issue du domaine source ;
+\item on attribue l’étiquette $1$ à chaque instance issue du domaine cible ;
+\item on entraîne un classificateur chargé de distinguer les exemples provenant des deux domaines.
+\end{itemize}
+
+Si ce classificateur parvient à distinguer facilement les deux types d’exemples, cela signifie que les distributions sont très différentes. À l’inverse, si la tâche de discrimination est difficile, cela indique que les deux domaines sont proches du point de vue de la classe d’hypothèses considérée.
+
+Ainsi, la H-divergence peut être interprétée comme une mesure de la capacité d’un modèle à discriminer les deux domaines, et son estimation revient à résoudre un problème de classification auxiliaire.\\
+
+
+
+Le lemme suivant formalise précisément cette idée en établissant un lien direct entre la H-divergence empirique et l’erreur d’un classificateur entraîné à distinguer les domaines source et cible.\\
+
+%=================================lemme2==================================================
+
+
+
+\begin{lemma}
+Soit $\mathcal{H}$ une classe d’hypothèses symétrique (c’est-à-dire que pour tout $h \in \mathcal{H}$, l’hypothèse $1 - h$ appartient aussi à $\mathcal{H}$), et soient $U$ et $U'$ deux échantillons de taille $m$.
+
+Alors, la H-divergence empirique s’écrit :
+\[
+\hat{d}_{\mathcal{H}}(U, U') = 2 \left( 1 - \min_{h \in \mathcal{H}} \left[
+\frac{1}{m} \sum_{x : h(x)=0} \mathbf{1}_{[{x \in U}]} + \frac{1}{m} \sum_{x : h(x)=1} \mathbf{1}_{[{x \in U'}]}
+\right] \right),
+\]
+où $\mathbf{1}_{x \in U}$ est la fonction indicatrice valant $1$ si $x \in U$, et $0$ sinon.
+\end{lemma}
+
+\begin{proof}
+
+Nous allons montrer que pour toute hypothèse $h$, en notant $I(h) = \{x \mid h(x)=1\}$ :
+\[
+1 - \left[
+\frac{1}{m} \sum_{x : h(x)=0} \mathbf{1}_{[{x \in U}]} + \frac{1}{m} \sum_{x : h(x)=1} \mathbf{1}_{[{x \in U'}]}
+\right]
+= \Pr_U(I(h)) - \Pr_{U'}(I(h)).
+\]
+
+On écrit :
+\[
+1 - \frac{1}{m} \left(
+\sum_{x : h(x)=0} \mathbf{1}_{[{x \in U}]} + \sum_{x : h(x)=1} \mathbf{1}_{[{x \in U'}]}
+\right).
+\]
+
+On ajoute et soustrait des termes symétriques afin de faire apparaître des probabilités :
+\[
+= \frac{1}{2m} \sum_{x : h(x)=0} \left(\mathbf{1}_{x \in U} + \mathbf{1}_{x \in U'}\right)
++ \frac{1}{2m} \sum_{x : h(x)=1} \left(\mathbf{1}_{x \in U} + \mathbf{1}_{x \in U'}\right)
+\]
+\[
+- \frac{1}{m} \left(
+\sum_{x : h(x)=0} \mathbf{1}_{x \in U}
++ \sum_{x : h(x)=1} \mathbf{1}_{x \in U'}
+\right).
+\]
+
+En regroupant les termes, on obtient :
+\[
+= \frac{1}{2m} \sum_{x : h(x)=0} \left(\mathbf{1}_{[{x \in U'}]} - \mathbf{1}_{[{x \in U}]}\right)
++ \frac{1}{2m} \sum_{x : h(x)=1} \left(\mathbf{1}_{[{x \in U}]} - \mathbf{1}_{[{x \in U'}]}\right).
+\]
+
+On reconnaît alors les probabilités empiriques :
+\[
+= \frac{1}{2}\left(1 - \Pr_{U'}(I(h)) - \bigl(1 - \Pr_U(I(h))\bigr)\right)
++ \frac{1}{2}\left(\Pr_U(I(h)) - \Pr_{U'}(I(h))\right).
+\]
+
+Ce qui donne finalement :
+\[
+= \Pr_U(I(h)) - \Pr_{U'}(I(h)).
+\]
+
+La valeur absolue dans la définition de la H-divergence provient de la symétrie de la classe $\mathcal{H}$, qui garantit que pour toute hypothèse $h$, son opposée $1-h$ appartient aussi à $\mathcal{H}$.\\
+\end{proof}
+
+
+Ce lemme établit un lien fondamental entre la H-divergence et un problème de classification. Il montre que la H-divergence empirique peut être calculée en cherchant l’hypothèse qui distingue le mieux les données provenant du domaine source de celles provenant du domaine cible.
+
+Plus précisément :
+\begin{itemize}
+\item si un classificateur parvient à séparer facilement les deux types de données, alors la divergence est élevée ;
+\item si aucun classificateur ne parvient à les distinguer, alors les deux distributions sont proches.
+\end{itemize}
+
+Ainsi, la mesure de divergence entre deux domaines se ramène à un problème concret d’apprentissage supervisé.\\
+
+
+
+
+Ce résultat conduit à une procédure pratique pour estimer la H-divergence :
+
+\begin{itemize}
+\item on construit un jeu de données en attribuant l’étiquette $0$ aux exemples du domaine source et $1$ à ceux du domaine cible ;
+\item on entraîne un classificateur pour distinguer ces deux classes ;
+\item l’erreur de ce classificateur permet d’estimer la H-divergence.
+\end{itemize}
+
+En pratique, la minimisation exacte de l’erreur est souvent intractable pour des classes d’hypothèses complexes. Cependant, il est possible d’obtenir de bonnes approximations en utilisant des méthodes d’optimisation basées sur des fonctions de perte convexes, comme cela sera illustré expérimentalement par la suite.\\
+
+
+
+\subsection{Borner la différence d’erreur à l’aide de la H-divergence}
+
+La H-divergence permet d’estimer la différence entre deux distributions à partir de données non étiquetées. Toutefois, afin de l’utiliser dans une borne sur l’erreur, il est nécessaire d’introduire des outils permettant de comparer les erreurs de différentes hypothèses au sein d’une même classe.
+
+Nous introduisons pour cela deux notions fondamentales.
+
+\subsubsection{Hypothèse jointe idéale}
+
+\begin{definition}
+L’hypothèse jointe idéale est définie comme l’hypothèse minimisant l’erreur combinée
+sur les domaines source et cible :
+\[
+h^*
+=
+\arg\min_{h\in H}
+\left(
+\varepsilon_S(h)+\varepsilon_T(h)
+\right).
+\]
+
+On note : $\lambda = \varepsilon_S(h^*) + \varepsilon_T(h^*)$.\\
+\end{definition}
+
+Cette hypothèse représente la meilleure performance qu’il est possible d’obtenir
+simultanément sur les deux domaines à l’aide d’une hypothèse de la classe $H$.
+
+La quantité $\lambda$ mesure ainsi la difficulté intrinsèque du problème d’adaptation :
+\begin{itemize}
+\item si $\lambda$ est faible, alors il existe une hypothèse performante à la fois sur le domaine source et sur le domaine cible ;
+\item si $\lambda$ est élevée, aucune hypothèse de $H$ ne peut obtenir de bonnes performances simultanément sur les deux domaines, ce qui rend l’adaptation difficile.
+\end{itemize}
+
+Ainsi, lorsque $\lambda$ est grand, minimiser uniquement l’erreur source ne permet pas
+d’espérer obtenir un bon classificateur sur le domaine cible. En revanche, lorsque $\lambda$
+est faible, la qualité de l’adaptation dépend principalement de la divergence entre les
+distributions $D_S$ et $D_T$.\\
+
+
+
+On suppose ici qu’il existe au moins une hypothèse minimisant l’erreur combinée
+sur les domaines source et cible. L’unicité de cette hypothèse n’est pas requise :
+si plusieurs hypothèses réalisent le minimum, $h^*$ désigne arbitrairement l’une
+d’entre elles.
+
+\subsubsection{Espace de différence symétrique}
+
+\begin{definition}
+Soit $\mathcal{H}$ une classe d’hypothèses. L’espace de différence symétrique, noté $\mathcal{H} \Delta \mathcal{H}$, est défini par :
+\[
+g \in \mathcal{H} \Delta \mathcal{H} \iff g(x) = h(x) \oplus h'(x) \quad \text{pour certains } h, h' \in \mathcal{H},
+\]
+où $\oplus$ désigne l’opérateur XOR.
+\end{definition}
+
+Autrement dit, chaque hypothèse $g \in \mathcal{H} \Delta \mathcal{H}$ correspond à l’ensemble des points sur lesquels deux hypothèses $h$ et $h'$ de $\mathcal{H}$ sont en désaccord.
+
+Cette construction est particulièrement importante car elle permet d’analyser les différences d’erreur entre hypothèses. En effet, les fonctions de $\mathcal{H} \Delta \mathcal{H}$ décrivent précisément les régions de l’espace où les prédictions varient au sein de la classe $\mathcal{H}$.
+
+\subsubsection{Rôle dans l’analyse des bornes}
+
+L’introduction de l’espace $\mathcal{H} \Delta \mathcal{H}$ permet de définir une divergence plus fine entre distributions, appelée $\mathcal{H}\Delta\mathcal{H}$-divergence.
+
+Cette divergence joue un rôle central dans les bornes d’adaptation de domaine, car elle capture uniquement les différences pertinentes du point de vue des hypothèses considérées, contrairement à la divergence $L_1$ qui est trop générale.
+
+Elle permettra notamment de relier les différences d’erreur entre domaines à la capacité des hypothèses à discriminer les deux distributions.\\
+
+
+Le lemme suivant montrera comment cette divergence peut être utilisée pour borner la différence d’erreur entre deux hypothèses, constituant ainsi une étape clé vers l’établissement de bornes théoriques en adaptation de domaine.\\
+
+
+
+%=================================lemme3======================================
+
+\begin{lemma}
+Pour toutes hypothèses $h, h' \in \mathcal{H}$, on a :
+\[
+\left| \varepsilon_S(h, h') - \varepsilon_T(h, h') \right|
+\leq \frac{1}{2}  d_{\mathcal{H}\Delta\mathcal{H}}(D_S, D_T).
+\]
+\end{lemma}
+
+\begin{proof}
+
+Par définition de la $\mathcal{H}\Delta\mathcal{H}$-divergence :
+\[
+d_{\mathcal{H}\Delta\mathcal{H}}(D_S, D_T)
+= 2 \sup_{h, h' \in \mathcal{H}}
+\left| \Pr_{x \sim D_S}\bigl[h(x) \neq h'(x)\bigr]
+- \Pr_{x \sim D_T}\bigl[h(x) \neq h'(x)\bigr] \right|.
+\]
+Or, par définition de l’erreur entre deux hypothèses :
+\[
+\varepsilon_S(h, h') = \Pr_{x \sim D_S}\bigl[h(x) \neq h'(x)\bigr],
+\quad
+\varepsilon_T(h, h') = \Pr_{x \sim D_T}\bigl[h(x) \neq h'(x)\bigr].
+\]
+
+On peut donc réécrire :
+\[
+d_{\mathcal{H}\Delta\mathcal{H}}(D_S, D_T)
+= 2 \sup_{h, h' \in \mathcal{H}}
+\left| \varepsilon_S(h, h') - \varepsilon_T(h, h') \right|.
+\]
+
+Par définition du supremum, pour tout couple $(h, h') \in \mathcal{H}^2$, on a :
+\[
+\left| \varepsilon_S(h, h') - \varepsilon_T(h, h') \right|
+\leq \sup_{h, h' \in \mathcal{H}}
+\left| \varepsilon_S(h, h') - \varepsilon_T(h, h') \right|.
+\]
+
+D’où :
+\[
+\left| \varepsilon_S(h, h') - \varepsilon_T(h, h') \right|
+\leq \frac{1}{2} , d_{\mathcal{H}\Delta\mathcal{H}}(D_S, D_T).
+\]
+
+\end{proof}
+
+
+
+Ce lemme établit un lien direct entre la différence d’erreur d’une paire d’hypothèses sur les domaines source et cible, et la divergence $\mathcal{H}\Delta\mathcal{H}$ entre ces deux domaines. Autrement dit, il montre que les variations d’erreur entre les deux distributions sont contrôlées par une mesure de divergence adaptée à la classe d’hypothèses. Cela constitue un résultat clé pour l’analyse de l’adaptation de domaine, car il permet de relier les performances des modèles à une quantité mesurable à partir de données non étiquetées.\\
+
+
+%==============================================th2============================================
+
+
+
+\begin{theorem}
+Soit $\mathcal{H}$ une classe d'hypothèses de dimension VC $d$.
+Soient $U_S$ et $U_T$ des échantillons non étiquetés de taille $m'$ tirés respectivement de $D_S$ et $D_T$.
+
+Alors, pour tout $\delta \in (0,1)$, avec probabilité au moins $1-\delta$, pour tout $h \in \mathcal{H}$ :
+\[
+\varepsilon_T(h)
+\le
+\varepsilon_S(h)
++ \frac{1}{2} \hat{d}_{\mathcal{H} \Delta \mathcal{H}}(U_S, U_T)
++ 4 \sqrt{\frac{2d \log(2m') + \log\left(\frac{2}{\delta}\right)}{m'}}
++ \lambda.
+\]
+\end{theorem}
+
+\begin{proof}
+
+La preuve repose sur le Lemme 3 ainsi que sur l’inégalité triangulaire pour l’erreur de classification :
+\[
+\varepsilon(f_1, f_2) \le \varepsilon(f_1, f_3) + \varepsilon(f_3, f_2).
+\]
+
+\paragraph{Étape 1 : introduction de l’hypothèse idéale}
+
+Soit $h^*$ l’hypothèse jointe idéale. On a :
+\[
+\varepsilon_T(h)
+\le
+\varepsilon_T(h^*) + \varepsilon_T(h, h^*).
+\]
+
+\paragraph{Étape 2 : passage du domaine cible au domaine source}
+
+On ajoute et soustrait $\varepsilon_S(h, h^*)$ :
+\[
+\varepsilon_T(h, h^*)
+=
+\varepsilon_S(h, h^*)
++ \left( \varepsilon_T(h, h^*) - \varepsilon_S(h, h^*) \right).
+\]
+
+Ainsi :
+\[
+\varepsilon_T(h)
+\le
+\varepsilon_T(h^*) + \varepsilon_S(h, h^*)
++ \left| \varepsilon_T(h, h^*) - \varepsilon_S(h, h^*) \right|.
+\]
+
+\paragraph{Étape 3 : application du Lemme 3}
+
+\[
+\left| \varepsilon_T(h, h^*) - \varepsilon_S(h, h^*) \right|
+\le
+\frac{1}{2} d_{\mathcal{H} \Delta \mathcal{H}}(D_S, D_T).
+\]
+
+Donc :
+\[
+\varepsilon_T(h)
+\le
+\varepsilon_T(h^*) + \varepsilon_S(h, h^*)
++ \frac{1}{2} d_{\mathcal{H} \Delta \mathcal{H}}(D_S, D_T).
+\]
+
+\paragraph{Étape 4 : inégalité triangulaire côté source}
+
+\[
+\varepsilon_S(h, h^*)
+\le
+\varepsilon_S(h) + \varepsilon_S(h^*).
+\]
+
+D’où :
+\[
+\varepsilon_T(h)
+\le
+\varepsilon_T(h^*) + \varepsilon_S(h) + \varepsilon_S(h^*)
++ \frac{1}{2} d_{\mathcal{H} \Delta \mathcal{H}}(D_S, D_T).
+\]
+
+\paragraph{Étape 5 : introduction de $\lambda$}
+
+Par définition :
+\[
+\lambda = \varepsilon_S(h^*) + \varepsilon_T(h^*).
+\]
+
+Ainsi :
+\[
+\varepsilon_T(h)
+\le
+\varepsilon_S(h)
++ \frac{1}{2} d_{\mathcal{H} \Delta \mathcal{H}}(D_S, D_T)
++ \lambda.
+\]
+
+\paragraph{Étape 6 : passage à la divergence empirique}
+
+En appliquant le Lemme 1 à $\mathcal{H} \Delta \mathcal{H}$, on obtient :
+\[
+d_{\mathcal{H} \Delta \mathcal{H}}(D_S, D_T)
+\le
+\hat{d}_{\mathcal{H} \Delta \mathcal{H}}(U_S, U_T)
++ 4 \sqrt{\frac{2d \log(2m') + \log\left(\frac{2}{\delta}\right)}{m'}}.
+\]
+
+En remplaçant dans l’inégalité précédente, on obtient le résultat annoncé.\\
+
+\end{proof}
+
+
+Ce théorème constitue le résultat central de l’analyse théorique de l’adaptation de domaine. Il montre que l’erreur sur le domaine cible est contrôlée par trois termes principaux :
+
+\begin{itemize}
+\item \textbf{l’erreur source} $\varepsilon_S(h)$, qui est directement optimisée lors de l’apprentissage ;
+\item \textbf{la divergence} $\mathcal{H}\Delta\mathcal{H}$ entre les distributions, estimable à partir de données non étiquetées ;
+\item \textbf{le terme $\lambda$}, qui mesure la capacité intrinsèque à trouver une hypothèse performante simultanément sur les deux domaines.
+\end{itemize}
+
+Le terme $\lambda$ joue un rôle fondamental. Il correspond à l’erreur combinée de la meilleure hypothèse commune aux deux domaines, et découle directement de l’utilisation de l’inégalité triangulaire.
+
+\begin{itemize}
+\item Si $\lambda$ est élevé, cela signifie qu’aucune hypothèse ne peut être performante sur les deux domaines : l’adaptation est alors impossible.
+\item Si $\lambda$ est faible (cas d’intérêt en pratique), l’erreur cible est principalement contrôlée par l’erreur source et la divergence entre les distributions.
+\end{itemize}
+
+Ce résultat met donc en évidence les conditions nécessaires à une adaptation de domaine réussie : une faible divergence entre les distributions et l’existence d’une hypothèse commune performante.\\
+
+
+La borne du Théorème 2 dépend du terme $\lambda$, et nous remarquons brièvement que la forme $
+\lambda = \varepsilon_S(h^*) + \varepsilon_T(h^*)$ provient de l’utilisation de l’inégalité triangulaire pour l’erreur de classification. D’autres fonctions de perte conduisent à des formes différentes de cette borne (Crammer et al., 2008).
+
+Lorsque l’erreur combinée de l’hypothèse jointe idéale est élevée, cela signifie qu’il n’existe
+aucun classificateur performant simultanément sur les domaines source et cible. Dans ce cas,
+il est impossible d’espérer apprendre une bonne hypothèse cible en se basant uniquement sur
+les données du domaine source.
+
+En revanche, lorsque $\lambda$ est faible (ce qui correspond au cas le plus pertinent en adaptation
+de domaine), la borne montre que l’erreur source ainsi que la divergence $H \Delta H$ non étiquetée
+sont des quantités essentielles pour contrôler l’erreur sur le domaine cible.
+
+\section{Une borne d'apprentissage combinant données source et cible}
+
+Le Théorème 2 montre comment relier l’erreur source et l’erreur cible. Nous présentons maintenant
+une borne d’apprentissage pour la minimisation du risque empirique lorsque l’on combine des
+données issues des domaines source et cible.
+
+Lors de la phase d’apprentissage, l’algorithme reçoit un échantillon $S = (S_T, S_S)$ de taille $m$, où $S_T$ contient $\beta m$ exemples tirés indépendamment selon la distribution
+$D_T$, et $S_S$ contient $(1 - \beta)m$ exemples tirés indépendamment selon $D_S$.
+
+L’objectif est de trouver une hypothèse minimisant l’erreur sur le domaine cible $\varepsilon_T(h)$.
+Cependant, lorsque $\beta$ est faible — ce qui est typique en adaptation de domaine — minimiser
+uniquement l’erreur empirique cible n’est pas nécessairement optimal.
+
+Nous considérons donc des algorithmes qui minimisent une combinaison convexe des erreurs
+empiriques source et cible : $\hat{\varepsilon}_\alpha(h) = \alpha \hat{\varepsilon}_T(h) + (1 -\alpha)\hat{\varepsilon}_S(h),$ où $\alpha \in [0,1]$.\\
+
+On note $\varepsilon_\alpha(h)$ la combinaison correspondante des erreurs vraies :
+\[
+\varepsilon_\alpha(h) = \alpha \varepsilon_T(h) + (1 - \alpha)\varepsilon_S(h).
+\]
+
+Nous allons borner l’erreur cible d’un algorithme d’adaptation de domaine qui minimise
+$\hat{\varepsilon}_\alpha(h)$.
+
+La preuve de cette borne repose sur deux résultats principaux, que nous énonçons sous forme de lemmes.
+Tout d’abord, nous bornons la différence entre l’erreur cible $\varepsilon_T(h)$ et l’erreur pondérée
+$\varepsilon_\alpha(h)$. Ensuite, nous bornons la différence entre l’erreur pondérée vraie
+$\varepsilon_\alpha(h)$ et son estimation empirique $\hat{\varepsilon}_\alpha(h)$.\\
+
+
+\begin{lemma}
+Soit $h$ une hypothèse appartenant à la classe $H$. Alors, la différence entre l’erreur cible
+et l’erreur pondérée vérifie :
+\[
+\left| \varepsilon_\alpha(h) - \varepsilon_T(h) \right|
+\leq (1 - \alpha)\left( \frac{1}{2} d_{H \Delta H}(D_S, D_T) + \lambda \right).
+\]
+\end{lemma}
+
+
+\begin{proof}
+La démonstration repose sur l’inégalité triangulaire pour l’erreur de classification.
+
+Par définition de l’erreur pondérée, on a :
+\[
+\varepsilon_\alpha(h) = \alpha \varepsilon_T(h) + (1 - \alpha)\varepsilon_S(h).
+\]
+Ainsi,
+\[
+\varepsilon_\alpha(h) - \varepsilon_T(h)
+= (1 - \alpha)\big(\varepsilon_S(h) - \varepsilon_T(h)\big),
+\]
+d’où :
+\[
+\left| \varepsilon_\alpha(h) - \varepsilon_T(h) \right|
+= (1 - \alpha)\left| \varepsilon_S(h) - \varepsilon_T(h) \right|.
+\]
+
+Nous allons maintenant borner le terme $|\varepsilon_S(h) - \varepsilon_T(h)|$.
+Pour cela, introduisons l’hypothèse jointe idéale $h^*$ et écrivons :
+\[
+\varepsilon_S(h) - \varepsilon_T(h)
+= (\varepsilon_S(h) - \varepsilon_S(h,h^*))
++ (\varepsilon_S(h,h^*) - \varepsilon_T(h,h^*))
++ (\varepsilon_T(h,h^*) - \varepsilon_T(h)).
+\]
+
+En appliquant l’inégalité triangulaire, on obtient :
+\[
+|\varepsilon_S(h) - \varepsilon_T(h)|
+\leq |\varepsilon_S(h) - \varepsilon_S(h,h^*)|
++ |\varepsilon_S(h,h^*) - \varepsilon_T(h,h^*)|
++ |\varepsilon_T(h,h^*) - \varepsilon_T(h)|.
+\]
+
+Par l’inégalité triangulaire des erreurs de classification, on a :
+\[
+|\varepsilon_S(h) - \varepsilon_S(h,h^*)| \leq \varepsilon_S(h^*),
+\quad
+|\varepsilon_T(h,h^*) - \varepsilon_T(h)| \leq \varepsilon_T(h^*).
+\]
+
+De plus, d’après le Lemme 4.3 :
+\[
+|\varepsilon_S(h,h^*) - \varepsilon_T(h,h^*)|
+\leq \frac{1}{2} d_{H \Delta H}(D_S, D_T).
+\]
+
+En combinant ces résultats, on obtient :
+\[
+|\varepsilon_S(h) - \varepsilon_T(h)|
+\leq \varepsilon_S(h^*) + \frac{1}{2} d_{H \Delta H}(D_S, D_T) + \varepsilon_T(h^*).
+\]
+
+En notant $\lambda = \varepsilon_S(h^*) + \varepsilon_T(h^*)$, il vient :
+\[
+|\varepsilon_S(h) - \varepsilon_T(h)|
+\leq \frac{1}{2} d_{H \Delta H}(D_S, D_T) + \lambda.
+\]
+
+Finalement,
+\[
+\left| \varepsilon_\alpha(h) - \varepsilon_T(h) \right|
+\leq (1 - \alpha)\left( \frac{1}{2} d_{H \Delta H}(D_S, D_T) + \lambda \right).
+\]
+\end{proof}
+
+
+
+
+Ce lemme montre que lorsque $\alpha$ tend vers $1$, on s’appuie de plus en plus sur les
+données du domaine cible, et l’influence de la divergence entre les domaines devient
+de moins en moins importante.
+
+Par ailleurs, la borne de convergence uniforme associée à l’erreur pondérée $\varepsilon_\alpha$
+est très proche de la borne classique de convergence uniforme pour des classes d’hypothèses
+de dimension VC finie (Vapnik, 1998 ; Anthony et Bartlett, 1999). La seule différence réside
+dans le fait que les erreurs source et cible sont ici pondérées différemment.
+
+L’élément clé de la démonstration repose sur une légère adaptation de l’inégalité de Hoeffding
+à notre cadre, que nous énonçons ci-dessous.
+
+Ce comportement traduit un compromis naturel : plus on fait confiance aux données cible,
+moins il est nécessaire de corriger le décalage entre les distributions.\\
+
+\begin{lemma}
+Soit $h$ une hypothèse fixée appartenant à $H$. Supposons qu’un échantillon aléatoire
+étiqueté de taille $m$ soit construit en tirant $\beta m$ exemples selon $D_T$ et
+$(1 - \beta)m$ exemples selon $D_S$, puis en les étiquetant respectivement selon $f_T$
+et $f_S$.
+
+Alors, pour tout $\varepsilon > 0$ et tout $\delta \in (0,1)$, avec une probabilité au moins
+égale à $1 - \delta$, on a :
+\[
+\Pr\left[ \left| \hat{\varepsilon}_\alpha(h) - \varepsilon_\alpha(h) \right| \geq \varepsilon \right]
+\leq 2 \exp\left(
+- \frac{2m \varepsilon^2}{\frac{\alpha^2}{\beta} + \frac{(1-\alpha)^2}{1-\beta}}
+\right).
+\]
+\end{lemma}
+
+\begin{proposition}[Inégalité de Hoeffding]
+Soient $X_1, \dots, X_n$ des variables aléatoires indépendantes telles que
+$a_i \leq X_i \leq b_i$ pour tout $i$. Alors, pour tout $\varepsilon > 0$,
+\[
+\Pr\left[ \left| \bar{X} - \mathbb{E}[\bar{X}] \right| \geq \varepsilon \right]
+\leq 2 \exp\left(
+\frac{-2n^2 \varepsilon^2}{\sum_{i=1}^n (b_i - a_i)^2}
+\right),
+\]
+où $\bar{X} = \frac{1}{n} \sum_{i=1}^n X_i$.
+\end{proposition}
+
+\begin{proof}
+(Lemme 5.2) L’idée est de réécrire l’erreur empirique pondérée comme une moyenne de variables aléatoires
+indépendantes, afin d’appliquer l’inégalité de Hoeffding.
+
+\medskip
+
+\textbf{Construction des variables aléatoires.}
+
+Pour les exemples $x \in S_T$, on définit :
+\[
+X_i = \frac{\alpha}{\beta} |h(x) - f_T(x)|, \quad i = 1, \dots, \beta m.
+\]
+
+Pour les exemples $x \in S_S$, on définit :
+\[
+X_i = \frac{1-\alpha}{1-\beta} |h(x) - f_S(x)|, \quad i = \beta m + 1, \dots, m.
+\]
+
+Ces variables sont indépendantes et vérifient :
+\[
+X_i \in \left[0, \frac{\alpha}{\beta}\right] \quad \text{ou} \quad
+X_i \in \left[0, \frac{1-\alpha}{1-\beta}\right].
+\]
+
+\medskip
+
+\textbf{Réécriture de l’erreur empirique.}
+
+On observe que :
+\[
+\hat{\varepsilon}_\alpha(h)
+= \alpha \hat{\varepsilon}_T(h) + (1-\alpha)\hat{\varepsilon}_S(h)
+= \frac{1}{m} \sum_{i=1}^m X_i.
+\]
+
+\medskip
+
+\textbf{Calcul de l’espérance.}
+
+Par linéarité de l’espérance :
+\[
+\mathbb{E}[\hat{\varepsilon}_\alpha(h)]
+= \alpha \varepsilon_T(h) + (1-\alpha)\varepsilon_S(h)
+= \varepsilon_\alpha(h).
+\]
+
+\medskip
+
+\textbf{Application de Hoeffding.}
+
+On applique l’inégalité de Hoeffding avec $n = m$ :
+\[
+\Pr\left[
+\left| \hat{\varepsilon}_\alpha(h) - \varepsilon_\alpha(h) \right| \geq \varepsilon
+\right]
+\leq 2 \exp\left(
+\frac{-2m^2 \varepsilon^2}{\sum_{i=1}^m (b_i - a_i)^2}
+\right).
+\]
+
+On calcule maintenant la somme des intervalles :
+
+\[
+\sum_{i=1}^m (b_i - a_i)^2
+= \beta m \left(\frac{\alpha}{\beta}\right)^2
++ (1-\beta)m \left(\frac{1-\alpha}{1-\beta}\right)^2.
+\]
+
+Donc :
+\[
+= m \left( \frac{\alpha^2}{\beta} + \frac{(1-\alpha)^2}{1-\beta} \right).
+\]
+
+\medskip
+
+\textbf{Conclusion.}
+
+On obtient finalement :
+\[
+\Pr\left[ \left| \hat{\varepsilon}_\alpha(h) - \varepsilon_\alpha(h) \right| \geq \varepsilon \right]
+\leq 2 \exp\left(
+- \frac{2m \varepsilon^2}{\frac{\alpha^2}{\beta} + \frac{(1-\alpha)^2}{1-\beta}}
+\right).
+\]
+\end{proof}
+
+
+
+Ce lemme montre que lorsque $\alpha$ s’éloigne de $\beta$ (qui correspond à un
+pondérage uniforme des données), l’approximation empirique de $\varepsilon_\alpha(h)$
+devient moins fiable.
+
+Autrement dit, donner un poids trop important à l’un des deux domaines (source ou cible)
+peut dégrader la qualité de l’estimation statistique lorsque le nombre d’exemples disponibles
+dans ce domaine est limité.\\ 
+
+\begin{theorem}
+Soit $H$ une classe d’hypothèses de dimension VC $d$. Soient $U_S$ et $U_T$
+des échantillons non étiquetés de taille $m'$ tirés respectivement selon $D_S$
+et $D_T$. Soit $S$ un échantillon étiqueté de taille $m$ construit en tirant
+$\beta m$ exemples selon $D_T$ et $(1-\beta)m$ exemples selon $D_S$.
+
+Soit $\hat{h} \in H$ l’hypothèse minimisant $\hat{\varepsilon}_\alpha(h)$ sur $S$, et
+$h_T^* = \arg\min_{h \in H} \varepsilon_T(h)$.
+
+Alors, pour tout $\delta \in (0,1)$, avec probabilité au moins $1-\delta$, on a :
+\[
+\varepsilon_T(\hat{h}) \leq \varepsilon_T(h_T^*)
++ 4 \sqrt{
+\frac{\alpha^2}{\beta} + \frac{(1-\alpha)^2}{1-\beta}
+}
+\sqrt{
+\frac{2d \log(2(m+1)) + 2\log\left(\frac{8}{\delta}\right)}{m}
+}
+\]
+\[
++ 2(1-\alpha)\left(
+\frac{1}{2}\hat{d}_{H\Delta H}(U_S, U_T)
++ 4 \sqrt{\frac{2d \log(2m') + \log\left(\frac{8}{\delta}\right)}{m'}}
++ \lambda
+\right).
+\]
+\end{theorem}
+
+
+
+
+Ce résultat généralise les cas classiques :
+
+\begin{itemize}
+\item Si $\alpha = 0$, on n’utilise que les données source : on retrouve la borne
+d’adaptation de domaine classique.
+\item Si $\alpha = 1$, on n’utilise que les données cible : on retrouve une borne
+d’apprentissage standard.
+\end{itemize}
+
+Pour une valeur optimale de $\alpha$, la borne est toujours au moins aussi bonne que ces deux cas extrêmes.
+
+Ainsi, ce théorème formalise le compromis fondamental en adaptation de domaine :
+il permet d’équilibrer l’utilisation d’un grand volume de données source (mais biaisées)
+avec une petite quantité de données cible (plus pertinentes).
+
+Enfin, lorsque $\lambda = 0$, c’est-à-dire lorsqu’il existe une hypothèse parfaite sur les deux
+domaines, la borne peut être améliorée, ce qui correspond au cadre réalisable.
+
+\newpage
+
+\section{Conclusion}
+
+Dans ce travail, nous avons étudié le problème de l’adaptation de domaine dans le cadre
+de la classification binaire. L’objectif principal était de comprendre dans quelles conditions
+un modèle entraîné sur un domaine source peut généraliser efficacement vers un domaine
+cible de distribution différente.
+
+Nous avons d’abord introduit le cadre mathématique de l’adaptation de domaine, puis
+analysé les liens entre erreur source et erreur cible. Cette étude met en évidence que la
+performance sur le domaine cible dépend non seulement de la qualité du classificateur sur
+le domaine source, mais également de la proximité entre les distributions et de la similarité
+des fonctions d’étiquetage.
+
+Nous avons ensuite présenté la notion de $H$-divergence, ainsi que la $H\Delta H$-
+divergence, qui fournissent des mesures de divergence particulièrement adaptées au cadre
+de l’apprentissage supervisé. Contrairement à des distances plus générales comme la
+divergence $L_1$, ces quantités se concentrent uniquement sur les différences pertinentes
+pour la classe d’hypothèses considérée.
+
+Enfin, nous avons étudié plusieurs bornes théoriques fondamentales reliant l’erreur
+cible à l’erreur source, à la divergence entre domaines et à l’existence d’une hypothèse
+commune performante. Ces résultats montrent qu’une adaptation de domaine réussie
+nécessite à la fois une faible divergence entre distributions et une compatibilité suffisante
+entre les tâches source et cible.
+
+Ce travail met ainsi en évidence le rôle central des mesures de divergence dans l’analyse
+théorique de l’adaptation de domaine, ainsi que le compromis entre quantité de données
+disponibles et pertinence des informations transférées.
+
+De nombreuses extensions existent aujourd’hui, notamment dans le cadre de l’adaptation
+de domaine profonde (\emph{deep domain adaptation}), où les représentations apprises par
+les réseaux de neurones sont utilisées pour réduire automatiquement les écarts entre
+domaines. Ces approches constituent une direction majeure de recherche actuelle en
+apprentissage automatique.
+
+\end{document}
+
+
